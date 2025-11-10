@@ -1,0 +1,77 @@
+const express = require("express");
+const cors = require("cors");
+const app = express();
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const port = process.env.PORT || 3000;
+
+app.use(cors());
+app.use(express.json());
+
+app.get("/", (req, res) => {
+  res.send("Hello World!");
+});
+
+app.listen(port, () => {
+  console.log(`Example app listening on port ${port}`);
+});
+
+const uri =
+  "mongodb+srv://smart_deals:RFuV4p6UXMHcmatX@cluster0.6l2dtxw.mongodb.net/?appName=Cluster0";
+const client = new MongoClient(uri, {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  },
+});
+async function run() {
+  try {
+    await client.connect();
+
+    const database = client.db("habitTracker");
+    const HabitCollection = database.collection("habits");
+
+    //get Methode
+
+    app.get("/habits", async (req, res) => {
+      const cursor = HabitCollection.find({}).sort({ createAt: 1 });
+      const habits = await cursor.toArray();
+      res.send(habits);
+    });
+
+    app.get("/habits/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const habit = await HabitCollection.findOne(query);
+      res.send(habit);
+    });
+
+    app.post("/habits", async (req, res) => {
+      const habit = req.body;
+      const result = await HabitCollection.insertOne(habit);
+      res.send(result);
+    });
+
+    app.delete("/habits/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await HabitCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    app.patch("/habits/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await HabitCollection.updateOne(query, { $set: req.body });
+      res.send(result);
+    });
+
+    await client.db("admin").command({ ping: 1 });
+    console.log(
+      "Pinged your deployment. You successfully connected to MongoDB!"
+    );
+  } finally {
+    // await client.close();
+  }
+}
+run().catch(console.dir);
