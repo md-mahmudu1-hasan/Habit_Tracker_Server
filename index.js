@@ -33,12 +33,6 @@ async function run() {
 
     //get Methode
 
-    app.get("/habits", async (req, res) => {
-      const cursor = HabitCollection.find({}).sort({ createAt: 1 });
-      const habits = await cursor.toArray();
-      res.send(habits);
-    });
-
     app.get("/habits/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -46,11 +40,27 @@ async function run() {
       res.send(habit);
     });
 
+    app.get("/habits", async (req, res) => {
+      const queryemail = req.query.email;
+      const query = {};
+
+      if (queryemail) {
+        query.UserEmail = queryemail;
+      }
+      const cursor = HabitCollection.find(query).sort({ createAt: -1 });
+      const habits = await cursor.toArray();
+      res.send(habits);
+    });
+
+    //post mathode
+
     app.post("/habits", async (req, res) => {
       const habit = req.body;
       const result = await HabitCollection.insertOne(habit);
       res.send(result);
     });
+
+    //delete mathode
 
     app.delete("/habits/:id", async (req, res) => {
       const id = req.params.id;
@@ -58,6 +68,8 @@ async function run() {
       const result = await HabitCollection.deleteOne(query);
       res.send(result);
     });
+
+    //patch mathode
 
     app.patch("/habits/:id", async (req, res) => {
       const id = req.params.id;
