@@ -16,7 +16,7 @@ app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
 });
 
-const uri =`mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.6l2dtxw.mongodb.net/?appName=Cluster0`;
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.6l2dtxw.mongodb.net/?appName=Cluster0`;
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -80,62 +80,73 @@ async function run() {
 
     app.patch("/habits/:id/complete", async (req, res) => {
       const id = req.params.id;
-      const habit = await HabitCollection.findOne({ _id: new ObjectId(id) });
-      if (!habit) return res.status(404).send({ message: "Habit not found" });
-
       const today = new Date();
       const todayStr = today.toISOString().split("T")[0];
 
-      if (habit.completedDates?.includes(todayStr)) {
-        return res
-          .status(400)
-          .send({ message: "Already marked complete today" });
-      }
+      try {
+        const habit = await HabitCollection.findOne({ _id: new ObjectId(id) });
+        if (!habit) return res.status(404).send({ message: "Habit not found" });
 
-      const updatedDates = [...(habit.completedDates || []), todayStr];
-
-      const sortedDays = updatedDates
-        .map((d) => new Date(d))
-        .sort((a, b) => b - a);
-
-      let streak = 0;
-      let checkDate = new Date();
-      checkDate.setHours(0, 0, 0, 0);
-
-      for (let day of sortedDays) {
-        day.setHours(0, 0, 0, 0);
-        const diff = (checkDate - day) / (1000 * 60 * 60 * 24);
-
-        if (diff === 0 || diff === 1) {
-          streak++;
-          checkDate = new Date(day);
-          checkDate.setDate(checkDate.getDate() - 1);
-        } else {
-          break;
+        if (habit.completedDates?.includes(todayStr)) {
+          return res
+            .status(400)
+            .send({ message: "Already marked complete today" });
         }
+
+        await HabitCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $push: { completedDates: todayStr } }
+        );
+        const updatedHabit = await HabitCollection.findOne({
+          _id: new ObjectId(id),
+        });
+        const updatedDates = updatedHabit.completedDates;
+
+        const sortedDays = updatedDates
+          .map((d) => new Date(d))
+          .sort((a, b) => b - a);
+
+        let streak = 0;
+        let checkDate = new Date();
+        checkDate.setHours(0, 0, 0, 0);
+
+        for (let day of sortedDays) {
+          day.setHours(0, 0, 0, 0);
+          const diff = (checkDate - day) / (1000 * 60 * 60 * 24);
+
+          if (diff === 0 || diff === 1) {
+            streak++;
+            checkDate = new Date(day);
+            checkDate.setDate(checkDate.getDate() - 1);
+          } else {
+            break;
+          }
+        }
+
+        const past30 = new Date();
+        past30.setDate(today.getDate() - 30);
+        const completedLast30 = updatedDates.filter(
+          (d) => new Date(d) >= past30 && new Date(d) <= today
+        );
+        const progress = Math.min(
+          100,
+          Math.round((completedLast30.length / 30) * 100)
+        );
+        await HabitCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { streak, progress } }
+        );
+
+        res.send({
+          completedDates: updatedDates,
+          progress,
+          streak,
+          message: "Habit marked complete",
+        });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Failed to update habit" });
       }
-
-      const past30 = new Date();
-      past30.setDate(today.getDate() - 30);
-      const completedLast30 = updatedDates.filter(
-        (d) => new Date(d) >= past30 && new Date(d) <= today
-      );
-      const progress = Math.min(
-        100,
-        Math.round((completedLast30.length / 30) * 100)
-      );
-
-      await HabitCollection.updateOne(
-        { _id: new ObjectId(id) },
-        { $set: { completedDates: updatedDates, progress, streak } }
-      );
-
-      res.send({
-        completedDates: updatedDates,
-        progress,
-        streak,
-        message: "Habit marked complete",
-      });
     });
 
     // await client.db("admin").command({ ping: 1 });
