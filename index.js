@@ -85,20 +85,52 @@ async function run() {
 
       const today = new Date().toISOString().split("T")[0];
 
-      if (habit.completedDates && habit.completedDates.includes(today)) {
+      if (habit.completedDates?.includes(today)) {
         return res
           .status(400)
           .send({ message: "Already marked complete today" });
       }
 
-      const updated = await HabitCollection.updateOne(
-        { _id: new ObjectId(id) },
-        {
-          $push: { completedDates: today },
-        }
+      const updatedDates = [...(habit.completedDates || []), today];
+      const now = new Date();
+      const past30 = new Date();
+      past30.setDate(now.getDate() - 30);
+      const completedLast30 = updatedDates.filter(
+        (d) => new Date(d) >= past30 && new Date(d) <= now
+      );
+      const progress = Math.min(
+        100,
+        Math.round((completedLast30.length / 30) * 100)
       );
 
-      res.send({ message: "Habit marked complete successfully", updated });
+      const sortedDays = updatedDates
+        .map((d) => new Date(d))
+        .sort((a, b) => b - a);
+      let streak = 0;
+      let todayDate = new Date();
+      todayDate.setHours(0, 0, 0, 0);
+
+      for (let i = 0; i < sortedDays.length; i++) {
+        const day = sortedDays[i];
+        const diff = (todayDate - day) / (1000 * 60 * 60 * 24);
+        if (diff === 0 || diff === 1) {
+          streak++;
+          todayDate = new Date(day);
+          todayDate.setDate(todayDate.getDate() - 1);
+        } else break;
+      }
+
+      if (streak === 0) streak = 1;
+
+      await HabitCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { completedDates: updatedDates, progress, streak } }
+      );
+
+      const updatedHabit = await HabitCollection.findOne({
+        _id: new ObjectId(id),
+      });
+      res.send(updatedHabit);
     });
 
     await client.db("admin").command({ ping: 1 });
@@ -106,7 +138,6 @@ async function run() {
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
   } finally {
-    // await client.close();
   }
 }
 run().catch(console.dir);
