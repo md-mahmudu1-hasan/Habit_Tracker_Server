@@ -78,6 +78,29 @@ async function run() {
       res.send(result);
     });
 
+    app.patch("/habits/:id/complete", async (req, res) => {
+      const id = req.params.id;
+      const habit = await HabitCollection.findOne({ _id: new ObjectId(id) });
+      if (!habit) return res.status(404).send({ message: "Habit not found" });
+
+      const today = new Date().toISOString().split("T")[0];
+
+      if (habit.completedDates && habit.completedDates.includes(today)) {
+        return res
+          .status(400)
+          .send({ message: "Already marked complete today" });
+      }
+
+      const updated = await HabitCollection.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $push: { completedDates: today },
+        }
+      );
+
+      res.send({ message: "Habit marked complete successfully", updated });
+    });
+
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
