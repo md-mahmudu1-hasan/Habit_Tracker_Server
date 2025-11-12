@@ -83,54 +83,59 @@ async function run() {
       const habit = await HabitCollection.findOne({ _id: new ObjectId(id) });
       if (!habit) return res.status(404).send({ message: "Habit not found" });
 
-      const today = new Date().toISOString().split("T")[0];
+      const today = new Date();
+      const todayStr = today.toISOString().split("T")[0];
 
-      if (habit.completedDates?.includes(today)) {
+      if (habit.completedDates?.includes(todayStr)) {
         return res
           .status(400)
           .send({ message: "Already marked complete today" });
       }
 
-      const updatedDates = [...(habit.completedDates || []), today];
-      const now = new Date();
+      const updatedDates = [...(habit.completedDates || []), todayStr];
+
+      const sortedDays = updatedDates
+        .map((d) => new Date(d))
+        .sort((a, b) => b - a);
+
+      let streak = 0;
+      let checkDate = new Date();
+      checkDate.setHours(0, 0, 0, 0);
+
+      for (let day of sortedDays) {
+        day.setHours(0, 0, 0, 0);
+        const diff = (checkDate - day) / (1000 * 60 * 60 * 24);
+
+        if (diff === 0 || diff === 1) {
+          streak++;
+          checkDate = new Date(day);
+          checkDate.setDate(checkDate.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+
       const past30 = new Date();
-      past30.setDate(now.getDate() - 30);
+      past30.setDate(today.getDate() - 30);
       const completedLast30 = updatedDates.filter(
-        (d) => new Date(d) >= past30 && new Date(d) <= now
+        (d) => new Date(d) >= past30 && new Date(d) <= today
       );
       const progress = Math.min(
         100,
         Math.round((completedLast30.length / 30) * 100)
       );
 
-      const sortedDays = updatedDates
-        .map((d) => new Date(d))
-        .sort((a, b) => b - a);
-      let streak = 0;
-      let todayDate = new Date();
-      todayDate.setHours(0, 0, 0, 0);
-
-      for (let i = 0; i < sortedDays.length; i++) {
-        const day = sortedDays[i];
-        const diff = (todayDate - day) / (1000 * 60 * 60 * 24);
-        if (diff === 0 || diff === 1) {
-          streak++;
-          todayDate = new Date(day);
-          todayDate.setDate(todayDate.getDate() - 1);
-        } else break;
-      }
-
-      if (streak === 0) streak = 1;
-
       await HabitCollection.updateOne(
         { _id: new ObjectId(id) },
         { $set: { completedDates: updatedDates, progress, streak } }
       );
 
-      const updatedHabit = await HabitCollection.findOne({
-        _id: new ObjectId(id),
+      res.send({
+        completedDates: updatedDates,
+        progress,
+        streak,
+        message: "Habit marked complete",
       });
-      res.send(updatedHabit);
     });
 
     await client.db("admin").command({ ping: 1 });
