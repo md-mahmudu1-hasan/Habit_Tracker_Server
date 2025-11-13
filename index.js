@@ -70,12 +70,25 @@ async function run() {
     });
 
     //patch mathode
-
     app.patch("/habits/:id", async (req, res) => {
       const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const result = await HabitCollection.updateOne(query, { $set: req.body });
-      res.send(result);
+      const updatedHabit = req.body;
+
+      try {
+        const result = await HabitCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updatedHabit }
+        );
+
+        if (result.modifiedCount === 0) {
+          return res.status(404).send({ message: "No habit found to update" });
+        }
+
+        res.send({ message: "Habit updated successfully" });
+      } catch (error) {
+        console.error("Update error:", error);
+        res.status(500).send({ message: "Failed to update habit" });
+      }
     });
 
     app.patch("/habits/:id/complete", async (req, res) => {
